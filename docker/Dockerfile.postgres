@@ -1,0 +1,35 @@
+# Dockerfile.postgres
+FROM postgres:16
+
+# 安装构建工具和git
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        postgresql-server-dev-$PG_MAJOR \
+        build-essential \
+        git \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装pgvector扩展
+RUN git clone --branch v0.5.1 https://github.com/pgvector/pgvector.git \
+    && cd pgvector \
+    && make \
+    && make install \
+    && cd .. \
+    && rm -rf pgvector
+
+# pg_trgm扩展已经包含在PostgreSQL的contrib包中，安装它
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        postgresql-contrib \
+    && rm -rf /var/lib/apt/lists/*
+
+# 清理构建依赖
+RUN apt-get update \
+    && apt-get remove -y \
+        postgresql-server-dev-$PG_MAJOR \
+        build-essential \
+        git \
+    && apt-get autoremove -y \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*

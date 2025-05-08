@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  postgres:
+    # 使用自定义Dockerfile构建镜像，支持pgvector扩展
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.postgres
+      args:
+        - http_proxy=http://wyh:wyh!23.@10.24.116.42:17890
+        - https_proxy=http://wyh:wyh!23.@10.24.116.42:17890
+    container_name: arxiv_postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: arxiv_papers
+    ports:
+      - "15432:5432"
+    volumes:
+      # 持久化数据到指定路径
+      - /data/DailyArxiv/postgres_data:/var/lib/postgresql/data
+      # 初始化脚本目录，会按字母顺序执行其中的.sql和.sh文件
+      - ./db/init:/docker-entrypoint-initdb.d
+      # 挂载自定义postgresql.conf
+      - ./db/postgresql.conf:/etc/postgresql/postgresql.conf
+    # 设置共享内存大小为16GB
+    shm_size: '16gb'
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arxiv_user -d arxiv_papers"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - arxiv_network
+
+  # 可选：pgAdmin管理界面
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: arxiv_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "15050:80"
+    depends_on:
+      - postgres
+    volumes:
+      - /data/DailyArxiv/pgadmin_data:/var/lib/pgadmin
+    restart: unless-stopped
+    networks:
+      - arxiv_network
+
+networks:
+  arxiv_network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+          ip_range: 172.20.0.0/24
